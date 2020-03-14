@@ -17,8 +17,15 @@ import (
 )
 
 // mi compare in visual code un avviso che i mod non sono settati, allora ho creato il mod con:
-// go mod init myencrypt/m
+// go mod init myencrypt/file-encrypt
 // codice adattato da ix.de/zqwx
+
+// Encripta e Decripta un file
+// ATTENZIONE: i files criptati possono essere decriptati solo con la chiave privata usata durante la criptazione (file key.pem).
+// Encripta
+//.\file-encrypt.exe -e -f D:\Hetzner\readme_Hetzner.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt
+// Decripta
+//.\file-encrypt.exe -d -f D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner2.txt
 
 const RsaLen = 1024
 
@@ -35,6 +42,19 @@ func Encrypt(plain []byte, pubkey *rsa.PublicKey) []byte {
 	ciph := aesgcm.Seal(nil, nonce, plain, nil)
 	s := [][]byte{encKey, nonce, ciph}
 	return bytes.Join(s, []byte{})
+}
+
+func Decrypt(ciph []byte, priv *rsa.PrivateKey) ([]byte, error) {
+	encKey := ciph[:RsaLen/8]
+	ciph = ciph[RsaLen/8:]
+	key, _ := rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, encKey, nil)
+
+	block, _ := aes.NewCipher(key)
+	aesgcm, _ := cipher.NewGCM(block)
+	nonce := ciph[:aesgcm.NonceSize()]
+	ciph = ciph[aesgcm.NonceSize():]
+
+	return aesgcm.Open(nil, nonce, ciph, nil)
 }
 
 func savePrivateKeyInFile(file string, priv *rsa.PrivateKey, pwd string) error {
@@ -66,12 +86,12 @@ func privateKeyFromFile(file string, pwd string) (*rsa.PrivateKey, error) {
 
 func main() {
 	var encr = flag.Bool("e", false, "Encript file")
-	var decr = flag.Bool("d", false, "Dencript file")
+	var decr = flag.Bool("d", false, "Decript file")
 	var f1 = flag.String("f", "", "Input file")
 	var f2 = flag.String("o", "", "Output file")
 	flag.Parse()
 
-	if !*encr || *decr {
+	if !*encr && !*decr {
 		log.Println("Action (-e or -d) is not defined")
 		os.Exit(0)
 	}
@@ -108,6 +128,22 @@ func main() {
 		}
 		enc := Encrypt(plain, &pub)
 		log.Printf("File %s is encrypted to: %v...", finput, enc[:10])
+
+		err = ioutil.WriteFile(fout, enc, 0644)
+		if err != nil {
+			log.Fatalln("Write file error: ", err)
+		}
+		log.Println("File written: ", fout)
+	} else {
+		plain, err := ioutil.ReadFile(finput)
+		if err != nil {
+			log.Fatalf("Input file %s error: %v", finput, err)
+		}
+		enc, err := Decrypt(plain, priv)
+		if err != nil {
+			log.Fatalln("Decript error: ", err)
+		}
+		log.Printf("File %s is dencrypted", finput)
 
 		err = ioutil.WriteFile(fout, enc, 0644)
 		if err != nil {

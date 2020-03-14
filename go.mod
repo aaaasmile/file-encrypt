@@ -1,4 +1,4 @@
-module myencrypt/m
+module myencrypt/file-encrypt
 
 go 1.13
 

@@ -1,4 +1,4 @@
-module myencrypt/file-encrypt
+module github.com/aaaasmile/file-encrypt
 
 go 1.13
 

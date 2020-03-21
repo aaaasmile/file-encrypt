@@ -31,6 +31,10 @@ const RsaLen = 1024
 
 func Encrypt(plain []byte, pubkey *rsa.PublicKey) []byte {
 
+//è interessante notare la procedura ibrida della criptazione.
+// Viene generata una nuova chiave random la quale viene poi criptata con la chiave pubblica 
+// e messa in testa al file. La chiave della sessione viene criptata con rsa.
+// Mentre il file viene creiptato con aes che è una procedura di cifrazione simmetrica.
 	key := make([]byte, 256/8) // AES-256
 	io.ReadFull(rand.Reader, key)
 
@@ -45,6 +49,9 @@ func Encrypt(plain []byte, pubkey *rsa.PublicKey) []byte {
 }
 
 func Decrypt(ciph []byte, priv *rsa.PrivateKey) ([]byte, error) {
+//Per primo viene estratta la chiave per la decriptazione via aes.
+// La chiave è in testa al file ed è codificata in rsa. La decriptazione della chiave per 
+// la sessione aes è possibile solo via rsa utilizzando la chiave privata in formato pem.
 	encKey := ciph[:RsaLen/8]
 	ciph = ciph[RsaLen/8:]
 	key, _ := rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, encKey, nil)

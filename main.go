@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -23,18 +24,18 @@ import (
 // Encripta e Decripta un file
 // ATTENZIONE: i files criptati possono essere decriptati solo con la chiave privata usata durante la criptazione (file key.pem).
 // Encripta
-//.\file-encrypt.exe -e -f D:\Hetzner\readme_Hetzner.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt
+//.\file-encrypt.exe -e -i D:\Hetzner\readme_Hetzner.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt
 // Decripta
-//.\file-encrypt.exe -d -f D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner2.txt
+//.\file-encrypt.exe -d -i D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner2.txt
 
 const RsaLen = 1024
 
 func Encrypt(plain []byte, pubkey *rsa.PublicKey) []byte {
 
-//è interessante notare la procedura ibrida della criptazione.
-// Viene generata una nuova chiave random la quale viene poi criptata con la chiave pubblica 
-// e messa in testa al file. La chiave della sessione viene criptata con rsa.
-// Mentre il file viene creiptato con aes che è una procedura di cifrazione simmetrica.
+	//è interessante notare la procedura ibrida della criptazione.
+	// Viene generata una nuova chiave random la quale viene poi criptata con la chiave pubblica
+	// e messa in testa al file. La chiave della sessione viene criptata con rsa.
+	// Mentre il file viene creiptato con aes che è una procedura di cifrazione simmetrica.
 	key := make([]byte, 256/8) // AES-256
 	io.ReadFull(rand.Reader, key)
 
@@ -49,9 +50,9 @@ func Encrypt(plain []byte, pubkey *rsa.PublicKey) []byte {
 }
 
 func Decrypt(ciph []byte, priv *rsa.PrivateKey) ([]byte, error) {
-//Per primo viene estratta la chiave per la decriptazione via aes.
-// La chiave è in testa al file ed è codificata in rsa. La decriptazione della chiave per 
-// la sessione aes è possibile solo via rsa utilizzando la chiave privata in formato pem.
+	//Per primo viene estratta la chiave per la decriptazione via aes.
+	// La chiave è in testa al file ed è codificata in rsa. La decriptazione della chiave per
+	// la sessione aes è possibile solo via rsa utilizzando la chiave privata in formato pem.
 	encKey := ciph[:RsaLen/8]
 	ciph = ciph[RsaLen/8:]
 	key, _ := rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, encKey, nil)
@@ -94,12 +95,13 @@ func privateKeyFromFile(file string, pwd string) (*rsa.PrivateKey, error) {
 func main() {
 	var encr = flag.Bool("e", false, "Encript file")
 	var decr = flag.Bool("d", false, "Decript file")
-	var f1 = flag.String("f", "", "Input file")
+	var show = flag.Bool("show", false, "Show an encripted file")
+	var f1 = flag.String("i", "", "Input file")
 	var f2 = flag.String("o", "", "Output file")
 	flag.Parse()
 
-	if !*encr && !*decr {
-		log.Println("Action (-e or -d) is not defined")
+	if !*encr && !*decr && !*show {
+		log.Println("Action (-e, -d or -show) is not defined")
 		os.Exit(0)
 	}
 
@@ -110,7 +112,7 @@ func main() {
 	}
 
 	fout := *f2
-	if fout == "" {
+	if fout == "" && !*show {
 		log.Println("File out is not provided (-o <fullpath>)")
 		os.Exit(0)
 	}
@@ -141,7 +143,7 @@ func main() {
 			log.Fatalln("Write file error: ", err)
 		}
 		log.Println("File written: ", fout)
-	} else {
+	} else if *decr || *show {
 		plain, err := ioutil.ReadFile(finput)
 		if err != nil {
 			log.Fatalf("Input file %s error: %v", finput, err)
@@ -151,12 +153,16 @@ func main() {
 			log.Fatalln("Decript error: ", err)
 		}
 		log.Printf("File %s is dencrypted", finput)
-
-		err = ioutil.WriteFile(fout, enc, 0644)
-		if err != nil {
-			log.Fatalln("Write file error: ", err)
+		if *decr {
+			err = ioutil.WriteFile(fout, enc, 0644)
+			if err != nil {
+				log.Fatalln("Write file error: ", err)
+			}
+			log.Println("File written: ", fout)
+		} else if *show {
+			log.Println("Decripted file content is:")
+			fmt.Printf("The content of '%s' : \n%s\n", finput, enc)
 		}
-		log.Println("File written: ", fout)
 	}
 
 }

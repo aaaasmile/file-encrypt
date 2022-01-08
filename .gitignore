@@ -1,3 +1,5 @@
 *.pem
 *.exe
 *.txt
+*.7z
+*.7z_enc

@@ -60,10 +60,18 @@ func Decrypt(ciph []byte, priv *rsa.PrivateKey) ([]byte, error) {
 	// la sessione aes è possibile solo via rsa utilizzando la chiave privata in formato pem.
 	encKey := ciph[:RsaLen/8]
 	ciph = ciph[RsaLen/8:]
-	key, _ := rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, encKey, nil)
-
-	block, _ := aes.NewCipher(key)
-	aesgcm, _ := cipher.NewGCM(block)
+	key, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, encKey, nil)
+	if err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
 	nonce := ciph[:aesgcm.NonceSize()]
 	ciph = ciph[aesgcm.NonceSize():]
 
@@ -86,6 +94,7 @@ func privateKeyFromFile(file string, pwd string) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Println("Using key: ", file)
 
 	block, _ := pem.Decode(der)
 
@@ -97,8 +106,10 @@ func privateKeyFromFile(file string, pwd string) (*rsa.PrivateKey, error) {
 	return priv, nil
 }
 
-func GetFullPath(relPath string) string {
-
+func GetFullPath(relPath string, use_relpath bool) string {
+	if use_relpath {
+		return relPath
+	}
 	if rootPath == "" {
 		var err error
 		rootPath, err = osext.ExecutableFolder()
@@ -106,7 +117,6 @@ func GetFullPath(relPath string) string {
 			log.Fatalf("ExecutableFolder failed: %v", err)
 		}
 		log.Println("Executable folder (rootdir) is ", rootPath)
-		//rootPath, _ = filepath.Split(os.Args[0]) // os.Args[0] can be "faked". (https://github.com/kardianos/osext)
 	}
 	r := filepath.Join(rootPath, relPath)
 	return r
@@ -118,6 +128,9 @@ func main() {
 	var show = flag.Bool("show", false, "Show an encripted file")
 	var f1 = flag.String("i", "", "Input file")
 	var f2 = flag.String("o", "", "Output file")
+	var relpath = flag.Bool("relpath", false, "Use relative path. Used id dev mode or when the exe is called in the same folder as the key")
+	var genkey = flag.Bool("genkey", false, "Create a private key")
+
 	flag.Parse()
 
 	if !*encr && !*decr && !*show {
@@ -138,13 +151,18 @@ func main() {
 	}
 
 	mySecret := "Serpico78"
-	keyFile := GetFullPath("key.pem")
+	keyFile := GetFullPath("./key.pem", *relpath)
 	priv, err := privateKeyFromFile(keyFile, mySecret)
 	if err != nil {
-		priv, _ = rsa.GenerateKey(rand.Reader, RsaLen)
-		err = savePrivateKeyInFile(keyFile, priv, mySecret)
-		if err != nil {
-			log.Fatal("Unable to save key: ", err)
+		log.Println("Error unable to get private key")
+		if *genkey {
+			priv, _ = rsa.GenerateKey(rand.Reader, RsaLen)
+			err = savePrivateKeyInFile(keyFile, priv, mySecret)
+			if err != nil {
+				log.Fatal("Unable to save key: ", err)
+			}
+		} else {
+			log.Fatal(err)
 		}
 	}
 
@@ -176,7 +194,7 @@ func main() {
 		if err != nil {
 			log.Fatalln("Decript error: ", err)
 		}
-		log.Printf("File %s is dencrypted", finput)
+		log.Printf("File %s is decrypted", finput)
 		if *decr {
 			err = ioutil.WriteFile(fout, enc, 0644)
 			if err != nil {
@@ -184,7 +202,6 @@ func main() {
 			}
 			log.Println("File written: ", fout)
 		} else if *show {
-			log.Println("Decripted file content is:")
 			fmt.Printf("The content of '%s' : \n%s\n", finput, enc)
 		}
 	}

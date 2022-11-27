@@ -15,6 +15,9 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
+
+	"github.com/kardianos/osext"
 )
 
 // mi compare in visual code un avviso che i mod non sono settati, allora ho creato il mod con:
@@ -29,6 +32,8 @@ import (
 //.\file-encrypt.exe -d -i D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner2.txt
 
 const RsaLen = 1024
+
+var rootPath string
 
 func Encrypt(plain []byte, pubkey *rsa.PublicKey) []byte {
 
@@ -92,6 +97,21 @@ func privateKeyFromFile(file string, pwd string) (*rsa.PrivateKey, error) {
 	return priv, nil
 }
 
+func GetFullPath(relPath string) string {
+
+	if rootPath == "" {
+		var err error
+		rootPath, err = osext.ExecutableFolder()
+		if err != nil {
+			log.Fatalf("ExecutableFolder failed: %v", err)
+		}
+		log.Println("Executable folder (rootdir) is ", rootPath)
+		//rootPath, _ = filepath.Split(os.Args[0]) // os.Args[0] can be "faked". (https://github.com/kardianos/osext)
+	}
+	r := filepath.Join(rootPath, relPath)
+	return r
+}
+
 func main() {
 	var encr = flag.Bool("e", false, "Encript file")
 	var decr = flag.Bool("d", false, "Decript file")
@@ -118,7 +138,7 @@ func main() {
 	}
 
 	mySecret := "Serpico78"
-	keyFile := "key.pem"
+	keyFile := GetFullPath("key.pem")
 	priv, err := privateKeyFromFile(keyFile, mySecret)
 	if err != nil {
 		priv, _ = rsa.GenerateKey(rand.Reader, RsaLen)
@@ -126,6 +146,10 @@ func main() {
 		if err != nil {
 			log.Fatal("Unable to save key: ", err)
 		}
+	}
+
+	if *decr && *show {
+		log.Fatal("Use -d or -show, but not together")
 	}
 
 	pub := priv.PublicKey

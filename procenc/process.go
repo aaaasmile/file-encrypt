@@ -50,6 +50,38 @@ func (p *ProcEnc) GenerateKey(outkeyFile string) error {
 	return savePrivateKeyInFile(outkeyFile, priv, p.secretSalt)
 }
 
+func (p *ProcEnc) MergeFile(finput string, foutput string) error {
+	plain_inp, err := ioutil.ReadFile(finput)
+	if err != nil {
+		return fmt.Errorf("Input file %s error: %v", finput, err)
+	}
+
+	plain_curr, err := p.decryptFile(foutput)
+	if err != nil {
+		return fmt.Errorf("Merge: error on derypting destination file %v", err)
+	}
+	log.Printf("File %s is decrypted", foutput)
+
+	mergedplainBuf := &bytes.Buffer{}
+	mergedplainBuf.Write(plain_curr)
+	mergedplainBuf.Write([]byte("\n"))
+	mergedplainBuf.Write(plain_inp)
+
+	pub := p.privKey.PublicKey
+	enc, err := encrypt(mergedplainBuf.Bytes(), &pub)
+	if err != nil {
+		return err
+	}
+	log.Printf("File %s with %s is encrypted to: %v...", finput, foutput, enc[:10])
+
+	err = ioutil.WriteFile(foutput, enc, 0644)
+	if err != nil {
+		return fmt.Errorf("Write file error: %v", err)
+	}
+	log.Println("File merged: ", foutput)
+	return nil
+}
+
 func (p *ProcEnc) EncryptFile(finput string, foutput string) error {
 	plain, err := ioutil.ReadFile(finput)
 	if err != nil {

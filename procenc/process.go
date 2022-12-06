@@ -13,19 +13,15 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"path/filepath"
-
-	"github.com/kardianos/osext"
 )
 
 type ProcEnc struct {
 	RsaLen     int
-	rootPath   string
 	secretSalt string
 	privKey    *rsa.PrivateKey
 }
 
-func NewProcEnc(secretSalt string, keyFile string, relPath bool) (*ProcEnc, error) {
+func NewProcEnc(secretSalt string, keyFile string) (*ProcEnc, error) {
 	proc := NewProcEncWithoutKey(secretSalt)
 
 	priv, err := privateKeyFromFile(keyFile, secretSalt)
@@ -52,22 +48,6 @@ func (p *ProcEnc) GenerateKey(outkeyFile string) error {
 	}
 	priv, _ := rsa.GenerateKey(rand.Reader, p.RsaLen)
 	return savePrivateKeyInFile(outkeyFile, priv, p.secretSalt)
-}
-
-func (p *ProcEnc) GetFullPath(relPath string, use_relpath bool) string {
-	if use_relpath {
-		return relPath
-	}
-	if p.rootPath == "" {
-		var err error
-		p.rootPath, err = osext.ExecutableFolder()
-		if err != nil {
-			log.Fatalf("ExecutableFolder failed: %v", err)
-		}
-		log.Println("Executable folder (rootdir) is ", p.rootPath)
-	}
-	r := filepath.Join(p.rootPath, relPath)
-	return r
 }
 
 func (p *ProcEnc) EncryptFile(finput string, foutput string) error {

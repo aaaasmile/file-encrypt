@@ -45,7 +45,7 @@ func main() {
 		log.Println("Action (-e, -d or -show) is not defined")
 		os.Exit(0)
 	}
-	_, err := conf.ReadConfig(*configfile)
+	_, err := conf.ReadConfig(*configfile, *relpath)
 	if err != nil {
 		log.Fatal("Config file error: ", err)
 	}
@@ -61,7 +61,7 @@ func main() {
 	if conf.Current.KeyFname == "" {
 		log.Fatal("Key file not configured in config file")
 	}
-	proc, err := procenc.NewProcEnc(conf.Current.MySecret, conf.Current.KeyFname, *relpath)
+	proc, err := procenc.NewProcEnc(conf.Current.MySecret, conf.Current.KeyFname)
 	if err != nil {
 		log.Fatal(err)
 	}

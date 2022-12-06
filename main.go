@@ -1,209 +1,95 @@
 package main
 
 import (
-	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/pem"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 
-	"github.com/kardianos/osext"
+	"github.com/aaaasmile/file-encrypt/conf"
+	"github.com/aaaasmile/file-encrypt/procenc"
 )
 
-// mi compare in visual code un avviso che i mod non sono settati, allora ho creato il mod con:
-// go mod init myencrypt/file-encrypt
-// codice adattato da ix.de/zqwx
-
-// Encripta e Decripta un file
-// ATTENZIONE: i files criptati possono essere decriptati solo con la chiave privata usata durante la criptazione (file key.pem).
-// Encripta
-//.\file-encrypt.exe -e -i D:\Hetzner\readme_Hetzner.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt
-// Decripta
-//.\file-encrypt.exe -d -i D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner_enc.txt -o D:\scratch\go-lang\crypto\file-encrypt\readme_Hetzner2.txt
-
-const RsaLen = 1024
-
-var rootPath string
-
-func Encrypt(plain []byte, pubkey *rsa.PublicKey) []byte {
-
-	//è interessante notare la procedura ibrida della criptazione.
-	// Viene generata una nuova chiave random la quale viene poi criptata con la chiave pubblica
-	// e messa in testa al file. La chiave della sessione viene criptata con rsa.
-	// Mentre il file viene creiptato con aes che è una procedura di cifrazione simmetrica.
-	key := make([]byte, 256/8) // AES-256
-	io.ReadFull(rand.Reader, key)
-
-	encKey, _ := rsa.EncryptOAEP(sha256.New(), rand.Reader, pubkey, key, nil)
-	block, _ := aes.NewCipher(key)
-	aesgcm, _ := cipher.NewGCM(block)
-	nonce := make([]byte, aesgcm.NonceSize())
-	io.ReadFull(rand.Reader, nonce)
-	ciph := aesgcm.Seal(nil, nonce, plain, nil)
-	s := [][]byte{encKey, nonce, ciph}
-	return bytes.Join(s, []byte{})
-}
-
-func Decrypt(ciph []byte, priv *rsa.PrivateKey) ([]byte, error) {
-	//Per primo viene estratta la chiave per la decriptazione via aes.
-	// La chiave è in testa al file ed è codificata in rsa. La decriptazione della chiave per
-	// la sessione aes è possibile solo via rsa utilizzando la chiave privata in formato pem.
-	encKey := ciph[:RsaLen/8]
-	ciph = ciph[RsaLen/8:]
-	key, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, encKey, nil)
-	if err != nil {
-		return nil, err
+func checkFilesNotEmpty(finp, fout string) error {
+	if finp == "" {
+		return fmt.Errorf("-i argument is missed (input file)")
 	}
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
+	if fout == "" {
+		return fmt.Errorf("-o argument is missed (output file)")
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	nonce := ciph[:aesgcm.NonceSize()]
-	ciph = ciph[aesgcm.NonceSize():]
-
-	return aesgcm.Open(nil, nonce, ciph, nil)
-}
-
-func savePrivateKeyInFile(file string, priv *rsa.PrivateKey, pwd string) error {
-	der := x509.MarshalPKCS1PrivateKey(priv)
-	pp := []byte(pwd)
-	block, err := x509.EncryptPEMBlock(rand.Reader, "RSA PRIVATE KEY", der, pp, x509.PEMCipherAES256)
-	if err != nil {
-		return err
-	}
-	log.Println("Save the key in ", file)
-	return ioutil.WriteFile(file, pem.EncodeToMemory(block), 0644)
-}
-
-func privateKeyFromFile(file string, pwd string) (*rsa.PrivateKey, error) {
-	der, err := ioutil.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-	log.Println("Using key: ", file)
-
-	block, _ := pem.Decode(der)
-
-	der, err = x509.DecryptPEMBlock(block, []byte(pwd))
-	if err != nil {
-		return nil, err
-	}
-	priv, err := x509.ParsePKCS1PrivateKey(der)
-	return priv, nil
-}
-
-func GetFullPath(relPath string, use_relpath bool) string {
-	if use_relpath {
-		return relPath
-	}
-	if rootPath == "" {
-		var err error
-		rootPath, err = osext.ExecutableFolder()
-		if err != nil {
-			log.Fatalf("ExecutableFolder failed: %v", err)
-		}
-		log.Println("Executable folder (rootdir) is ", rootPath)
-	}
-	r := filepath.Join(rootPath, relPath)
-	return r
+	return nil
 }
 
 func main() {
 	var encr = flag.Bool("e", false, "Encript file")
 	var decr = flag.Bool("d", false, "Decript file")
 	var show = flag.Bool("show", false, "Show an encripted file")
-	var f1 = flag.String("i", "", "Input file")
-	var f2 = flag.String("o", "", "Output file")
-	var relpath = flag.Bool("relpath", false, "Use relative path. Used id dev mode or when the exe is called in the same folder as the key")
+	var finput = flag.String("i", "", "Input file (encripted/decripted file)")
+	var foutput = flag.String("o", "", "Output file (key or encrypted/decripted file)")
+	var relpath = flag.Bool("relpath", false, "Use relative path. Used it in dev mode or when the exe is called in the same folder as the key")
 	var genkey = flag.Bool("genkey", false, "Create a private key")
+	var configfile = flag.String("config", "config.toml", "Configuration file path")
+	var ver = flag.Bool("version", false, "Prints current version")
 
 	flag.Parse()
+	if *decr && *show {
+		log.Fatal("Use -d or -show, but not together")
+	}
+
+	if *ver {
+		fmt.Printf("%s, version: %s", conf.Appname, conf.Buildnr)
+		os.Exit(0)
+	}
 
 	if !*encr && !*decr && !*show {
 		log.Println("Action (-e, -d or -show) is not defined")
 		os.Exit(0)
 	}
-
-	finput := *f1
-	if finput == "" {
-		log.Println("File name is not provided (-f <fullpath>)")
-		os.Exit(0)
-	}
-
-	fout := *f2
-	if fout == "" && !*show {
-		log.Println("File out is not provided (-o <fullpath>)")
-		os.Exit(0)
-	}
-
-	mySecret := "Serpico78"
-	keyFile := GetFullPath("./key.pem", *relpath)
-	priv, err := privateKeyFromFile(keyFile, mySecret)
+	_, err := conf.ReadConfig(*configfile)
 	if err != nil {
-		log.Println("Error unable to get private key")
-		if *genkey {
-			priv, _ = rsa.GenerateKey(rand.Reader, RsaLen)
-			err = savePrivateKeyInFile(keyFile, priv, mySecret)
-			if err != nil {
-				log.Fatal("Unable to save key: ", err)
-			}
-		} else {
-			log.Fatal(err)
+		log.Fatal("Config file error: ", err)
+	}
+	if *genkey {
+		if err := checkFilesNotEmpty(" ", *foutput); err != nil {
+			log.Fatal("Argument not specified: ", err)
+		}
+		proc := procenc.NewProcEncWithoutKey(conf.Current.MySecret)
+		if err := proc.GenerateKey(*foutput); err != nil {
+			log.Fatal("Error on generate key: ", err)
 		}
 	}
 
-	if *decr && *show {
-		log.Fatal("Use -d or -show, but not together")
+	proc, err := procenc.NewProcEnc(conf.Current.MySecret, conf.Current.KeyFname, *relpath)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	pub := priv.PublicKey
 
 	if *encr {
-		plain, err := ioutil.ReadFile(finput)
-		if err != nil {
-			log.Fatalf("Input file %s error: %v", finput, err)
+		if err := checkFilesNotEmpty(*finput, *foutput); err != nil {
+			log.Fatal("Argument not specified: ", err)
 		}
-		enc := Encrypt(plain, &pub)
-		log.Printf("File %s is encrypted to: %v...", finput, enc[:10])
-
-		err = ioutil.WriteFile(fout, enc, 0644)
-		if err != nil {
-			log.Fatalln("Write file error: ", err)
+		if err := proc.EncryptFile(*finput, *foutput); err != nil {
+			log.Fatal(err)
 		}
-		log.Println("File written: ", fout)
-	} else if *decr || *show {
-		plain, err := ioutil.ReadFile(finput)
-		if err != nil {
-			log.Fatalf("Input file %s error: %v", finput, err)
+		os.Exit(0)
+	}
+	if *decr {
+		if err := checkFilesNotEmpty(*finput, *foutput); err != nil {
+			log.Fatal("Argument not specified: ", err)
 		}
-		enc, err := Decrypt(plain, priv)
-		if err != nil {
-			log.Fatalln("Decript error: ", err)
+		if err := proc.DecryptFile(*finput, *foutput); err != nil {
+			log.Fatal("Decrypt error: ", err)
 		}
-		log.Printf("File %s is decrypted", finput)
-		if *decr {
-			err = ioutil.WriteFile(fout, enc, 0644)
-			if err != nil {
-				log.Fatalln("Write file error: ", err)
-			}
-			log.Println("File written: ", fout)
-		} else if *show {
-			fmt.Printf("The content of '%s' : \n%s\n", finput, enc)
+		os.Exit(0)
+	}
+	if *show {
+		if err := checkFilesNotEmpty(*finput, " "); err != nil {
+			log.Fatal("Argument not specified: ", err)
 		}
+		if err := proc.ShowDecryptedFile(*finput); err != nil {
+			log.Fatal("Show file error: ", err)
+		}
+		os.Exit(0)
 	}
 
 }

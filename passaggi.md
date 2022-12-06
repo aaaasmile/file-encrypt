@@ -13,7 +13,7 @@ e se poi si usa il path assoluto.
 ## Decriptare files in altri folder
 Per mostrare il contenuto criptato di un file in un altro folder, si usa: 
 
-    C:\Projects\go-lang\crypto\file-encrypt\file-encrypt.exe -show  -i .\<nome_file>
+    D:\Projects\go-lang\crypto\file-encrypt\file-encrypt.exe -show  -i .\<nome_file>
 
 ## TODO
 Implementa un comando merge che prenda un file criptato come primo valore ed esegua un 
@@ -29,4 +29,7 @@ chiama come il primo file:
     ciao2
 
 Esempio comando: -merge -i ciao_enc.txt -clear ciao.txt -o ciao_enc.txt
+
+### Credits
+Codice adattato da ix.de/zqwx
 

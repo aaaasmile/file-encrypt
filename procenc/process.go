@@ -27,11 +27,10 @@ type ProcEnc struct {
 
 func NewProcEnc(secretSalt string, keyFile string, relPath bool) (*ProcEnc, error) {
 	proc := NewProcEncWithoutKey(secretSalt)
-	keyFile = proc.GetFullPath(keyFile, relPath)
 
 	priv, err := privateKeyFromFile(keyFile, secretSalt)
 	if err != nil {
-		log.Println("Error unable to get private key")
+		log.Println("Error unable to get private key on ", keyFile)
 		return nil, err
 	}
 	proc.privKey = priv
@@ -116,11 +115,11 @@ func (p *ProcEnc) ShowDecryptedFile(finput string) error {
 }
 
 func (p *ProcEnc) decryptFile(finput string) ([]byte, error) {
-	plain, err := ioutil.ReadFile(finput)
+	payload, err := ioutil.ReadFile(finput)
 	if err != nil {
 		return nil, fmt.Errorf("Input file %s error: %v", finput, err)
 	}
-	return decrypt(plain, p.privKey, p.RsaLen)
+	return decrypt(payload, p.privKey, p.RsaLen)
 }
 
 func privateKeyFromFile(file string, pwd string) (*rsa.PrivateKey, error) {
@@ -187,6 +186,9 @@ func decrypt(ciph []byte, priv *rsa.PrivateKey, RsaLen int) ([]byte, error) {
 	//Per primo viene estratta la chiave per la decriptazione via aes.
 	// La chiave è in testa al file ed è codificata in rsa. La decriptazione della chiave per
 	// la sessione aes è possibile solo via rsa utilizzando la chiave privata in formato pem.
+	if len(ciph) < RsaLen/8 {
+		return nil, fmt.Errorf("File content is not encrypted with this tool")
+	}
 	encKey := ciph[:RsaLen/8]
 	ciph = ciph[RsaLen/8:]
 	key, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, priv, encKey, nil)

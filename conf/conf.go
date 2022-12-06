@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"log"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -17,6 +18,7 @@ const Appname = "file-encrypt"
 const Buildnr = "000.001.20221206-00"
 
 func ReadConfig(configfile string) (*Config, error) {
+	log.Println("Read config file ", configfile)
 	_, err := os.Stat(configfile)
 	if err != nil {
 		return nil, err

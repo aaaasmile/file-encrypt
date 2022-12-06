@@ -21,8 +21,8 @@ func checkFilesNotEmpty(finp, fout string) error {
 }
 
 func main() {
-	var encr = flag.Bool("e", false, "Encript file")
-	var decr = flag.Bool("d", false, "Decript file")
+	var encr = flag.Bool("enc", false, "Encript file")
+	var decr = flag.Bool("dec", false, "Decript file")
 	var show = flag.Bool("show", false, "Show an encripted file")
 	var finput = flag.String("i", "", "Input file (encripted/decripted file)")
 	var foutput = flag.String("o", "", "Output file (key or encrypted/decripted file)")
@@ -58,7 +58,9 @@ func main() {
 			log.Fatal("Error on generate key: ", err)
 		}
 	}
-
+	if conf.Current.KeyFname == "" {
+		log.Fatal("Key file not configured in config file")
+	}
 	proc, err := procenc.NewProcEnc(conf.Current.MySecret, conf.Current.KeyFname, *relpath)
 	if err != nil {
 		log.Fatal(err)

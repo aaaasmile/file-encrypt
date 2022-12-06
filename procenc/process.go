@@ -167,7 +167,10 @@ func encrypt(plain []byte, pubkey *rsa.PublicKey) ([]byte, error) {
 	//è interessante notare la procedura ibrida della criptazione.
 	// Viene generata una nuova chiave random la quale viene poi criptata con la chiave pubblica
 	// e messa in testa al file. La chiave della sessione viene criptata con rsa.
-	// Mentre il file viene creiptato con aes che è una procedura di cifrazione simmetrica.
+	// Mentre il file viene criptato con aes che è una procedura di cifrazione simmetrica.
+	// Non solo, il metodo Seal aggiunge anche una validazione del payload tramite hash.
+	// AEAD è la procedura del caso. Questo significa che la decriptazione è possibile solo
+	// su payloads esplicitamente criptati con questa funzione.
 	key := make([]byte, 256/8) // AES-256
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, err
@@ -198,6 +201,8 @@ func decrypt(ciph []byte, priv *rsa.PrivateKey, RsaLen int) ([]byte, error) {
 	//Per primo viene estratta la chiave per la decriptazione via aes.
 	// La chiave è in testa al file ed è codificata in rsa. La decriptazione della chiave per
 	// la sessione aes è possibile solo via rsa utilizzando la chiave privata in formato pem.
+	// Nota che nel file viene anche memorizzato il nonce che è una sequenza random predefinita,
+	// probabilmente un padding.
 	if len(ciph) < RsaLen/8 {
 		return nil, fmt.Errorf("File content is not encrypted with this tool")
 	}
